@@ -322,6 +322,61 @@ $("#mediarefresh").click(function() {
     socket.emit("playerReady");
 });
 
+/* cast functions */
+
+var applicationID = '30A8B05C';
+var namespace = 'urn:x-cast:com.calzoneman.sync';
+var session = null;
+
+function initializeCastApi() {
+  var sessionRequest = new chrome.cast.SessionRequest(applicationID);
+  var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
+    sessionListener,
+    receiverListener);
+
+  chrome.cast.initialize(apiConfig, onInitSuccess, onError);
+};
+
+function onInitSuccess() {
+  console.log('onInitSuccess');
+}
+
+function onError(message) {
+  console.log('onError: ' + JSON.stringify(message));
+}
+
+function sessionListener(e) {
+  console.log('New session ID: ' + e.sessionId);
+  session = e;
+  session.addUpdateListener(sessionUpdateListener);
+}
+
+function sessionUpdateListener(isAlive) {
+  console.log((isAlive ? 'Session Updated' : 'Session Removed') + ': ' + session.sessionId);
+  if (!isAlive) {
+    session = null;
+  }
+};
+
+function receiverListener(e) {
+  if (e !== chrome.cast.ReceiverAvailability.AVAILABLE) {
+    console.log('No Chromecast receivers available');
+  }
+}
+
+function onRequestSessionSuccess(e) {
+      session = e;
+ }
+ 
+ 
+
+$("#cast").click(function() {
+    console.log("starting cast")
+    initializeCastApi()
+    chrome.cast.timeout = 999999999999
+    chrome.cast.requestSession(onRequestSessionSuccess, onError);
+});
+
 /* playlist controls */
 
 $("#queue").sortable({
@@ -564,12 +619,61 @@ $("#shuffleplaylist").click(function() {
 /* load channel */
 
 var loc = document.location+"";
+console.log(loc);
 var m = loc.match(/\/r\/([a-zA-Z0-9-_]+)/);
 if(m) {
     CHANNEL.name = m[1];
     if (CHANNEL.name.indexOf("#") !== -1) {
         CHANNEL.name = CHANNEL.name.substring(0, CHANNEL.name.indexOf("#"));
     }
+} else {
+    CHANNEL.name = 'dinsfire'
+    
+        cast.receiver.logger.setLevelValue(0);
+        window.castReceiverManager = cast.receiver.CastReceiverManager.getInstance();
+        console.log('Starting Receiver Manager');
+        
+        // handler for the 'ready' event
+        castReceiverManager.onReady = function(event) {
+          console.log('Received Ready event: ' + JSON.stringify(event.data));
+          window.castReceiverManager.setApplicationState("Application status is ready...");
+        };
+        
+        // handler for 'senderconnected' event
+        castReceiverManager.onSenderConnected = function(event) {
+          console.log('Received Sender Connected event: ' + event.data);
+          console.log(window.castReceiverManager.getSender(event.data).userAgent);
+        };
+        
+        // handler for 'senderdisconnected' event
+        castReceiverManager.onSenderDisconnected = function(event) {
+          console.log('Received Sender Disconnected event: ' + event.data);
+          if (window.castReceiverManager.getSenders().length == 0) {
+	        window.close();
+	      }
+        };
+        
+        // handler for 'systemvolumechanged' event
+        castReceiverManager.onSystemVolumeChanged = function(event) {
+          console.log('Received System Volume Changed event: ' + event.data['level'] + ' ' +
+              event.data['muted']);
+        };
+        
+        // create a CastMessageBus to handle messages for a custom namespace
+        window.messageBus =
+          window.castReceiverManager.getCastMessageBus(
+              'urn:x-cast:com.calzoneman.sync');
+        // handler for the CastMessageBus message event
+        window.messageBus.onMessage = function(event) {
+          console.log('Message [' + event.senderId + ']: ' + event.data);
+          // inform all senders on the CastMessageBus of the incoming message event
+          // sender message listener will be invoked
+          window.messageBus.send(event.senderId, event.data);
+        }
+        
+        // initialize the CastReceiverManager with an application status message
+        window.castReceiverManager.start({statusText: "Application is starting"});
+        console.log('Receiver Manager started');
 }
 
 /* channel ranks stuff */
